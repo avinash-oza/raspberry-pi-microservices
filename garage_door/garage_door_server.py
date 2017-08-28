@@ -12,7 +12,7 @@ config.read('garage_door.config')
 
 # Pi specific constants relative to looking at the house
 RELAY_PIN_MAPPING = {'LEFT' : 27, 'RIGHT': 22} 
-GARAGE_SENSOR_MAPPING = {'LEFT': 25, 'RIGHT': 8}
+GARAGE_SENSOR_MAPPING = {'LEFT': 25, 'RIGHT': 16}
 SORTED_KEYS = [k for k in sorted(RELAY_PIN_MAPPING)] # Sort keys so order is the same
 
 def setup_pins():
