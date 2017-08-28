@@ -5,17 +5,17 @@ from bottle import get, post, request, run
 config = ConfigParser.RawConfigParser()
 config.read('nagios_passive_check.config')
 
-#get('/login')
-#ef login():
-#   return '''
-#           <form action="/submit_check" method="post">
-#                       Username: <input name="hostname" type="text" />
-#                       Username: <input name="service_description" type="text" />
-#                       Username: <input name="return_code" type="text" />
-#                       Username: <input name="plugin_output" type="text" />
-#                                               <input value="Login" type="submit" />
-#                                                       </form>
-#                                                           '''
+@get('/submit_check')
+def login():
+    return '''
+            <form action="/submit_check" method="post">
+                        Username: <input name="hostname" type="text" />
+                        Username: <input name="service_description" type="text" />
+                        Username: <input name="return_code" type="text" />
+                        Username: <input name="plugin_output" type="text" />
+                                                <input value="Login" type="submit" />
+                                                        </form>
+                                                            '''
 @post('/submit_check')
 def do_login():
     current_timestamp = int(time.time())
