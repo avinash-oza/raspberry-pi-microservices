@@ -15,7 +15,7 @@ def get_ds18b20_sensor(sensor_id, critical_temp):
     # Convert temperature to F
     f_degrees = 1.8*float(temperature)/1000 + 32
     error_code = 0
-    if f_degrees > CRITICAL_TEMP:
+    if f_degrees > critical_temp:
         error_code = 2
 
     return f_degrees, error_code
