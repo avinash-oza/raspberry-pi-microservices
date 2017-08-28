@@ -76,5 +76,6 @@ def insert_alert(alert_text, data):
     conn.commit()
     conn.close()
 
-run(host='0.0.0.0', port=25001)
+port_number = int(config.get('general', 'port'))
+run(host='0.0.0.0', port=port_number)
 
