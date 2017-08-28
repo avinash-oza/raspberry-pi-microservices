@@ -7,7 +7,7 @@ from bottle import route, run, template, auth_basic
 import RPi.GPIO as GPIO
 
 config = ConfigParser.RawConfigParser()
-config.read('garage-door.config')
+config.read('garage_door.config')
 
 
 # Pi specific constants relative to looking at the house
