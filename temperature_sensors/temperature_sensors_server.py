@@ -25,13 +25,19 @@ hostname = config.get('general', 'hostname')
 
 @route('/temperature/<sensor_name>')
 def temperature_route(sensor_name):
-    #TODO: Add error handling
     response = []
-    sensor_name = [sensor_name]
+    if sensor_name == 'all':
+        sensor_names = SORTED_KEYS
+    else:
+        sensor_names = [sensor_name]
 
-    for one_sensor in sensor_name:
+    for one_sensor in sensor_names:
         one_response = {}
-        sensor_temp, error = get_ds18b20_sensor(TEMPERATURE_SENSOR_MAPPING[one_sensor], critical_temp=CRITICAL_TEMP)
+        try:
+            sensor_temp, error = get_ds18b20_sensor(TEMPERATURE_SENSOR_MAPPING[one_sensor], critical_temp=CRITICAL_TEMP)
+        except:
+            sensor_temp = 'ERROR OCCURED FOR {0}".format(one_sensor)'
+            error = 2 # Critcal status
 
         one_response['sensor_name'] = one_sensor
         one_response['service_description'] = "{0} Temperature".format(one_sensor.capitalize())
