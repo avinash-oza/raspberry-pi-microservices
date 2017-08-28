@@ -32,7 +32,7 @@ def do_login():
 
     with open('/var/lib/nagios3/rw/nagios.cmd', 'a') as f:
         for l in lines_to_write:
-            f.write(line_to_write)
+            f.write(l)
     return
 
 port_number = int(config.get('general', 'port'))
