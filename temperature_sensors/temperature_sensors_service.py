@@ -14,7 +14,7 @@ config.read('temperature_sensors.config')
 
 
 # Pi specific constants relative to looking at the house
-TEMPERATURE_SENSOR_MAPPING = {'CASE': '28-05167155beff'}
+TEMPERATURE_SENSOR_MAPPING = {'GARAGE': '28-05167155beff'}
 SORTED_KEYS = [k for k in sorted(TEMPERATURE_SENSOR_MAPPING)] # Sort keys so order is the same
 CRITICAL_TEMP = float(config.get('general', 'critical_temperature'))
 hostname = config.get('general', 'hostname')
