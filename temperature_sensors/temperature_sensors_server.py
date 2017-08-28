@@ -12,9 +12,11 @@ config.read('temperature_sensors.config')
 
 # The output is kept the same as the nagios passive check plugin so that this result can be submitted directly
 
+# Get the senors and zip them to make a dict
+sensor_names = config.get('general','sensor_names').split(',')
+sensor_ids = config.get('general','sensor_ids').split(',')
+TEMPERATURE_SENSOR_MAPPING = dict(zip(sensor_names, sensor_ids))
 
-# Pi specific constants relative to looking at the house
-TEMPERATURE_SENSOR_MAPPING = {'GARAGE': '28-05167155beff'}
 SORTED_KEYS = [k for k in sorted(TEMPERATURE_SENSOR_MAPPING)] # Sort keys so order is the same
 CRITICAL_TEMP = float(config.get('general', 'critical_temperature'))
 hostname = config.get('general', 'hostname')
