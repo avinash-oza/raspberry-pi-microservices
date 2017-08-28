@@ -1,1 +1,1 @@
-mysql-connector == 2.1.4
+mysql-connector==2.1.4
