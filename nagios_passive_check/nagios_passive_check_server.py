@@ -18,18 +18,22 @@ def login():
                                                             '''
 @post('/submit_check')
 def do_login():
-    current_timestamp = int(time.time())
-    hostname = request.forms.get('hostname')
-    service_description = request.forms.get('service_description')
-    return_code = request.forms.get('return_code')
-    service_output = request.forms.get('plugin_output')
+    # Response should always be a list of json dicts
+    lines_to_write = []
+    for one_item in request.json:
+        current_timestamp = int(time.time())
+        hostname = one_item.get('hostname')
+        service_description = one_item.get('service_description')
+        return_code = one_item.get('return_code')
+        service_output = one_item.get('plugin_output')
 
-    line_to_write = '[{0}] {1}'.format(current_timestamp, ';'.join(['PROCESS_SERVICE_CHECK_RESULT', hostname, service_description, return_code, service_output]))
+        lines_to_write.append('[{0}] {1}'.format(current_timestamp, ';'.join(['PROCESS_SERVICE_CHECK_RESULT', hostname, service_description, return_code, service_output])))
+    print(lines_to_write)
 
     with open('/var/lib/nagios3/rw/nagios.cmd', 'a') as f:
-        f.write(line_to_write)
-
-    return line_to_write
+        for l in lines_to_write:
+            f.write(line_to_write)
+    return
 
 port_number = int(config.get('general', 'port'))
 run(host='0.0.0.0', port=port_number)
