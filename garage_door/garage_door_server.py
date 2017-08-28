@@ -9,6 +9,8 @@ import RPi.GPIO as GPIO
 config = ConfigParser.RawConfigParser()
 config.read('garage_door.config')
 
+hostname = config.get('general', 'hostname')
+
 
 # Pi specific constants relative to looking at the house
 RELAY_PIN_MAPPING = {'LEFT' : 27, 'RIGHT': 22} 
@@ -93,10 +95,16 @@ def garage_status_route(garage_name):
         one_response = {}
         garage_status, error = get_garage_status(one_garage)
 
+        # Nagios fields
+        one_response['plugin_output'] = "Garage is {0}".format(garage_status)
+        one_response['service_description'] = "{0} Garage Status".format(one_garage.capitalize())
+        one_response['hostname'] = hostname
+        one_response['return_code'] = "0" if garage_status == "CLOSED" else "2"
+
         one_response['garage_name'] = one_garage
-        one_response['error'] = error
-        one_response['status'] = garage_status
         one_response['status_time'] = datetime.datetime.now().strftime('%I:%M:%S%p')
+        one_response['status'] = garage_status
+        one_response['error'] = error
 
         response.append(one_response)
 
