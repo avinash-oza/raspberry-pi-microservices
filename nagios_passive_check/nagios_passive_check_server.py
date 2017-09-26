@@ -5,6 +5,18 @@ from bottle import get, post, request, run
 config = ConfigParser.RawConfigParser()
 config.read('nagios_passive_check.config')
 
+@post('/submit_nagios_command')
+def submit_nagios_command():
+    # Takes the input text and writes it out to nagios.cmd
+    line_to_write = request.text
+    with open('/var/lib/nagios3/rw/nagios.cmd', 'a') as f:
+        print("Got {0} to write".format(line_to_write))
+        return
+        f.write(line_to_write + '\n')
+    return
+
+
+
 @get('/submit_check')
 def login():
     return '''
