@@ -3,6 +3,7 @@ import os
 import sqlite3
 import argparse
 import datetime
+import time
 import mysql.connector
 import ConfigParser
 import json
@@ -75,6 +76,45 @@ def insert_alert(alert_text, data):
     # Commit the changes
     conn.commit()
     conn.close()
+
+@route('/acknowledge/<alert_id>')
+def acknowledge_alert(alert_id):
+     db_host_name = config.get('DATABASE', 'host')
+     db_user_name = config.get('DATABASE', 'user')
+     db_password = config.get('DATABASE', 'password')
+     database_name = config.get('DATABASE', 'database')
+
+     conn =  mysql.connector.connect(user=db_user_name,password=db_password,host=db_host_name, database=database_name)
+     cursor = conn.cursor(buffered=True)
+     # Get the current unsent alerts. Make sure to send them in order
+     query = "SELECT hostname, service_name FROM nagios_alerts where id=%s"
+     cursor.execute(query, (alert_id,))
+
+     results = [c for c in cursor]
+     if not results:
+         return "No results found for id {0}".format(alert_id)
+
+     host_name, service_name = results[0]
+
+     # alert id was found, construct string to write for downtime and commenting
+     current_time = int(time.time())
+     svc_comment_string = "[{timestamp}] ADD_SVC_COMMENT;{host_name};{service_name};0;web_service;DOWNTIME SCHEDULED VIA TELEGRAM".format(timestamp=current_time,
+                                                                                                                                       host_name=host_name,
+                                                                                                                                       service_name=service_name)
+
+     one_day = 60*60*24 # 24 hours
+     downtime_string = "[{timestamp}] SCHEDULE_SVC_DOWNTIME;{host_name};{service_name};{timestamp};{end_time};1;0;{one_day};web_service;DOWNTIME SCHEDULED VIA TELEGRAM".format(timestamp=current_time,
+                                                                                                                                       host_name=host_name,
+                                                                                                                                       service_name=service_name,
+                                                                                                                                       one_day=one_day,
+                                                                                                                                       end_time=current_time + one_day)
+     lines_to_write = [downtime_string, svc_comment_string]
+     with open('/var/lib/nagios3/rw/nagios.cmd','a') as f:
+         for one_line in lines_to_write:
+             f.write(one_line + '\n')
+
+    return "Success"
+
 
 port_number = int(config.get('general', 'port'))
 run(host='0.0.0.0', port=port_number)
