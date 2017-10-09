@@ -113,7 +113,7 @@ def acknowledge_alert(alert_id):
          for one_line in lines_to_write:
              f.write(one_line + '\n')
 
-    return "Success"
+     return "Success"
 
 
 port_number = int(config.get('general', 'port'))
