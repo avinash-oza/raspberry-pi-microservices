@@ -43,21 +43,27 @@ def get_alerts():
 
      conn =  mysql.connector.connect(user=db_user_name,password=db_password,host=db_host_name, database=database_name)
      cursor = conn.cursor(buffered=True)
-     c = conn.cursor(buffered=True)
-     write_cursor = conn.cursor(buffered=True)
+     c = conn.cursor(dictionary=True)
      # Get the current unsent alerts. Make sure to send them in order
-     c.execute("SELECT id date_inserted,date_sent,message_text,status,hostname,service_name, notification_type FROM nagios_alerts WHERE STATUS='UNSENT' ORDER BY id ASC LIMIT 5")
+     c.execute("SELECT id,date_inserted,message_text,status,hostname,service_name, notification_type FROM nagios_alerts WHERE STATUS='UNSENT' ORDER BY id ASC LIMIT 5")
      # Enumerate the counter so we know how many results returned
      results = [one_result for one_result in c]
+     print(results)
      total_count_of_alerts = len(results)
 
      ret = []
 
      for o in results:
-         o = list(o)
-         o[1] = o[1].strftime('%Y-%m-%d %H:%M:%S%p') if o[1] else o[1] # date inserted
+         o['date_inserted'] = o['date_inserted'].strftime('%Y-%m-%d %H:%M:%S%p') if o['date_inserted'] else o['date_inserted'] # date inserted
+         # check if it can be acknowledged
+         if o['notification_type'] == 'PROBLEM':
+             o['acknowledgable'] = True
+         else:
+             o['acknowledgable'] = False
+
          ret.append(o)
 
+     print(json.dumps(ret))
      return json.dumps(ret)
 
 
@@ -114,6 +120,26 @@ def acknowledge_alert(alert_id):
              f.write(one_line + '\n')
 
      return "Success"
+
+@route('/update_alert/<alert_id>/<status>')
+def update_alert(alert_id, status):
+    if status.upper() not in ('SENT', 'ERROR', 'UNSENT'):
+        return "Invalid status"
+
+    db_host_name = config.get('DATABASE', 'host')
+    db_user_name = config.get('DATABASE', 'user')
+    db_password = config.get('DATABASE', 'password')
+    database_name = config.get('DATABASE', 'database')
+
+    conn =  mysql.connector.connect(user=db_user_name,password=db_password,host=db_host_name, database=database_name)
+    cursor = conn.cursor(buffered=True)
+    # Get the current unsent alerts. Make sure to send them in order
+    query = "UPDATE nagios_alerts SET status=%s, date_sent=NOW() where id=%s"
+    cursor.execute(query, (status, alert_id))
+    conn.commit()
+    conn.close()
+
+    return "Success"
 
 
 port_number = int(config.get('general', 'port'))
