@@ -40,6 +40,7 @@ def temperature_route(sensor_name):
             error = 2 # Critcal status
 
         one_response['sensor_name'] = one_sensor
+        one_response['raw_value'] = sensor_temp
         one_response['service_description'] = "{0} Temperature".format(one_sensor.capitalize())
         one_response['plugin_output'] = "{0} Temperature: {1}F".format(one_sensor.capitalize(), sensor_temp)
         one_response['return_code'] = str(error)
