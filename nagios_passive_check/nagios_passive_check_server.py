@@ -36,7 +36,6 @@ def do_login():
         service_output = one_item.get('plugin_output')
 
         lines_to_write.append('[{0}] {1}'.format(current_timestamp, ';'.join(['PROCESS_SERVICE_CHECK_RESULT', hostname, service_description, return_code, service_output])))
-    print(lines_to_write)
 
     with open('/var/lib/nagios3/rw/nagios.cmd', 'a') as f:
         for l in lines_to_write:
