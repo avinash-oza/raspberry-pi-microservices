@@ -54,7 +54,7 @@ def get_alerts():
      ret = []
 
      for o in results:
-         o['date_inserted'] = o['date_inserted'].strftime('%Y-%m-%d %H:%M:%S%p') if o['date_inserted'] else o['date_inserted'] # date inserted
+         o['date_inserted'] = o['date_inserted'].strftime('%Y-%m-%d %H:%M:%S %p') if o['date_inserted'] else o['date_inserted'] # date inserted
          # check if it can be acknowledged
          if o['notification_type'] == 'PROBLEM':
              o['acknowledgable'] = True

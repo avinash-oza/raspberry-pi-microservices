@@ -44,7 +44,7 @@ def temperature_route(sensor_name):
         one_response['service_description'] = "{0} Temperature".format(one_sensor.capitalize())
         one_response['plugin_output'] = "{0} Temperature: {1}F".format(one_sensor.capitalize(), sensor_temp)
         one_response['return_code'] = str(error)
-        one_response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S%p')
+        one_response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
         one_response['hostname'] = hostname
 
         response.append(one_response)

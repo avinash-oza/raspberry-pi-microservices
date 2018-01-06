@@ -102,7 +102,7 @@ def garage_status_route(garage_name):
         one_response['return_code'] = "0" if garage_status == "CLOSED" else "2"
 
         one_response['garage_name'] = one_garage
-        one_response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S%p')
+        one_response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
         one_response['status'] = garage_status
         one_response['error'] = error
 
@@ -114,7 +114,7 @@ def garage_status_route(garage_name):
 @auth_basic(basic_auth_check)
 def garage_control_route(garage_name, current_status):
     response = {}
-    response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S%p')
+    response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
 
     message, error = control_garage(garage_name, current_status)
 
