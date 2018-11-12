@@ -182,8 +182,7 @@ def sns_callback_route():
 if __name__ == '__main__':
     try:
         setup_pins()
-    #   port_number = int(config.get('general', 'port'))
-        port_number = 8000
+        port_number = int(config.get('general', 'port'))
         app.run(host='0.0.0.0', port=port_number)
     finally:
         GPIO.cleanup()
