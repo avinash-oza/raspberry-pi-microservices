@@ -1,15 +1,18 @@
 import time
 import datetime
 import json
-import ConfigParser
+import configparser
 
-from bottle import route, run, template, auth_basic
+from flask import Flask, request
+import boto3
 import RPi.GPIO as GPIO
 
-config = ConfigParser.RawConfigParser()
+config = configparser.ConfigParser()
 config.read('garage_door.config')
 
 hostname = config.get('general', 'hostname')
+
+app = Flask(__name__)
 
 
 # Pi specific constants relative to looking at the house
@@ -77,13 +80,13 @@ def control_garage(garage_name, action):
 
 # Bottle related logic
 
-def basic_auth_check(username, password):
-    expected_username = config.get('auth', 'username')
-    expected_password = config.get('auth', 'password')
-    return username == expected_username and password == expected_password
+#ef basic_auth_check(username, password):
+#   expected_username = config.get('auth', 'username')
+#   expected_password = config.get('auth', 'password')
+#   return username == expected_username and password == expected_password
 
 
-@route('/garage/status/<garage_name>')
+@app.route('/garage/status/<garage_name>')
 def garage_status_route(garage_name):
     response = []
     if garage_name == 'all':
@@ -110,8 +113,8 @@ def garage_status_route(garage_name):
 
     return json.dumps(response)
 
-@route('/garage/control/<garage_name>/<current_status>')
-@auth_basic(basic_auth_check)
+#app.route('/garage/control/<garage_name>/<current_status>')
+#auth_basic(basic_auth_check)
 def garage_control_route(garage_name, current_status):
     response = {}
     response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
@@ -121,9 +124,11 @@ def garage_control_route(garage_name, current_status):
     response.update({'status': message, 'error': error})
     return json.dumps(response)
 
-try:
-    setup_pins()
-    port_number = int(config.get('general', 'port'))
-    run(host='0.0.0.0', port=port_number)
-finally:
-    GPIO.cleanup()
+if __name__ == '__main__':
+    try:
+        setup_pins()
+    #   port_number = int(config.get('general', 'port'))
+        port_number = 8000
+        app.run(host='0.0.0.0', port=port_number)
+    finally:
+        GPIO.cleanup()
