@@ -2,6 +2,7 @@ import time
 import datetime
 import json
 import configparser
+import requests
 
 from flask import Flask, request
 import boto3
@@ -19,6 +20,10 @@ app = Flask(__name__)
 RELAY_PIN_MAPPING = {'LEFT' : 27, 'RIGHT': 22} 
 GARAGE_SENSOR_MAPPING = {'LEFT': 25, 'RIGHT': 16}
 SORTED_KEYS = [k for k in sorted(RELAY_PIN_MAPPING)] # Sort keys so order is the same
+
+# connect and retrieve queue name
+sqs = boto3.resource('sqs')
+queue = sqs.get_queue_by_name(QueueName='garage-responses')
 
 def setup_pins():
     GPIO.setmode(GPIO.BCM)
@@ -66,30 +71,25 @@ def control_garage(garage_name, action):
     else:
         relay_pin = RELAY_PIN_MAPPING[garage_name]
         try:
-            GPIO.output(relay_pin,GPIO.HIGH)
+#           GPIO.output(relay_pin,GPIO.HIGH)
             time.sleep(0.5)
-            GPIO.output(relay_pin,GPIO.LOW)
+#           GPIO.output(relay_pin,GPIO.LOW)
         except:
             message = 'AN ERROR OCCURED WHILE TRIGGERING THE RELAY'
         else:
             action_error = False
             message = 'TRIGGERED {0} GARAGE TO {1}. OLD POSITION: {2}'.format(garage_name, action, current_garage_status)
 
+    # we dont return this in the output as it makes the message big
+    if action_error:
+        print(message)
+
     return message, action_error
 
-
-# Bottle related logic
-
-#ef basic_auth_check(username, password):
-#   expected_username = config.get('auth', 'username')
-#   expected_password = config.get('auth', 'password')
-#   return username == expected_username and password == expected_password
-
-
-@app.route('/garage/status/<garage_name>')
-def garage_status_route(garage_name):
+def get_garage_json_status(garage_name, limit_keys=None):
+    # limit_keys used to filter dictionary to trim down response
     response = []
-    if garage_name == 'all':
+    if garage_name.lower() == 'all':
         garage_name = SORTED_KEYS
     else:
         garage_name = [garage_name]
@@ -109,20 +109,75 @@ def garage_status_route(garage_name):
         one_response['status'] = garage_status
         one_response['error'] = error
 
+        one_response = one_response if limit_keys is None else {k: one_response[k] for k in limit_keys if k in one_response}
+
         response.append(one_response)
 
     return json.dumps(response)
 
-#app.route('/garage/control/<garage_name>/<current_status>')
-#auth_basic(basic_auth_check)
-def garage_control_route(garage_name, current_status):
+def garage_control_json(garage_name, current_status, limit_keys=None):
     response = {}
     response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
 
     message, error = control_garage(garage_name, current_status)
 
     response.update({'status': message, 'error': error})
+    response = response if limit_keys is None else {k: response[k] for k in limit_keys if k in response}
     return json.dumps(response)
+
+def process_sns_message(data):
+    # message that came via SNS
+    message_id = data['MessageId']
+    raw_message = json.loads(data['Message'])
+    action_type = raw_message['type']
+    garage_name = raw_message['garage_name']
+
+    #TODO figure out a better way to update the json
+    if action_type == 'STATUS':
+        response_keys = ['garage_name', 'status', 'error']
+        status_list = json.loads(get_garage_json_status(garage_name, limit_keys=response_keys))
+        return_message = {'status' : status_list}
+    elif action_type == 'CONTROL':
+        response_keys = ['error']
+        current_status = raw_message['current_status']
+        return_message = json.loads(garage_control_json(garage_name, current_status, limit_keys=response_keys))
+        return_message['status'] = 'success' if not return_message['error'] else 'fail'
+    else:
+        return_message = {'status': 'Invalid action passed', 'error': True}
+    return_message.update({'id': message_id[:4]})
+
+    # publish the message to the queue
+    print("TEST publishing {}".format(return_message))
+
+#   queue.send_message(MessageBody=json.dumps(return_message))
+
+# web related logic
+
+@app.route('/garage/status/<garage_name>')
+def garage_status_route(garage_name):
+    return get_garage_json_status(garage_name)
+
+@app.route('/sns-callback', methods=['POST'])
+def sns_callback_route():
+    try:
+        data = json.loads(request.data.decode('utf-8'))
+    except Exception as e:
+        print(e)
+        print("exception parsing {}".format(request.data))
+    else:
+        if data['Type'] == 'SubscriptionConfirmation' and 'SubscribeURL' in data:
+            # call the subscription url to confirm
+            print(data['SubscribeURL'])
+            requests.get(data['SubscribeURL'])
+        elif data['Type'] == 'Notification':
+            # extract out the message and process
+            print("Message is {}".format(data))
+            process_sns_message(data)
+        else:
+            print("Couldnt process message: {}".format(data))
+
+    return 'OK\n'
+
 
 if __name__ == '__main__':
     try:
