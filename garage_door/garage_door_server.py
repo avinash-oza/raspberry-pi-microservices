@@ -5,6 +5,7 @@ import configparser
 import requests
 
 from flask import Flask, request
+from flask_restplus import Api, Resource
 import boto3
 import RPi.GPIO as GPIO
 
@@ -14,6 +15,7 @@ config.read('garage_door.config')
 hostname = config.get('general', 'hostname')
 
 app = Flask(__name__)
+api = Api(app)
 
 
 # Pi specific constants relative to looking at the house
