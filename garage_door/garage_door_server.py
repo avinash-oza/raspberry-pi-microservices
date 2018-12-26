@@ -127,31 +127,6 @@ def garage_control_json(garage_name, current_status, limit_keys=None):
     response = response if limit_keys is None else {k: response[k] for k in limit_keys if k in response}
     return json.dumps(response)
 
-def process_sns_message(data):
-    # message that came via SNS
-    message_id = data['MessageId']
-    raw_message = json.loads(data['Message'])
-    action_type = raw_message['type']
-    garage_name = raw_message['garage_name']
-
-    #TODO figure out a better way to update the json
-    if action_type == 'STATUS':
-        response_keys = ['garage_name', 'status', 'error']
-        status_list = json.loads(get_garage_json_status(garage_name, limit_keys=response_keys))
-        return_message = {'status' : status_list}
-    elif action_type == 'CONTROL':
-        response_keys = ['error']
-        current_status = raw_message['current_status']
-        return_message = json.loads(garage_control_json(garage_name, current_status, limit_keys=response_keys))
-        return_message['status'] = 'success' if not return_message['error'] else 'fail'
-    else:
-        return_message = {'status': 'Invalid action passed', 'error': True}
-    return_message.update({'id': message_id[:4]})
-
-    # publish the message to the queue
-    print("TEST publishing {}".format(return_message))
-
-#   queue.send_message(MessageBody=json.dumps(return_message))
 
 # web related logic
 
@@ -159,6 +134,7 @@ GarageStatusModel = api.model('GarageStatusModel', {
     'garage_name': fields.String(),
     'status': fields.String(),
     'error': fields.Boolean(),
+    'message': fields.String(allow_null=True)
 })
 
 NagiosGarageStatusModel = api.inherit('NagiosGarageStatusModel', GarageStatusModel,
@@ -170,42 +146,88 @@ NagiosGarageStatusModel = api.inherit('NagiosGarageStatusModel', GarageStatusMod
                                       )
 
 GarageStatusResponseModel = api.model('GarageStatusResponseModel',
-                                      {'status': fields.List(fields.Nested(GarageStatusModel))
+                                      {'status': fields.List(fields.Nested(GarageStatusModel)),
+                                       'type': fields.String(default='STATUS'),
+                                        'id': fields.String()
                                        }
                                       )
 
-NagiosGarageStatusResponseModel = api.model('GarageStatusResponseModel',
-                                            {'status': fields.List(fields.Nested(NagiosGarageStatusModel))
-                                             }
-                                            )
 
-@api.route('/garage/status/<garage_name>')
+@api.route('/garage/status')
 class GarageStatusResource(Resource):
     @api.marshal_with(GarageStatusResponseModel)
-    def get(self, garage_name):
-        return {'status': get_garage_json_status(garage_name) }
+    def get(self, garage_name='ALL'):
+        return {'status': get_garage_json_status(garage_name), 'type': 'STATUS' }
 
 
-@app.route('/sns-callback', methods=['POST'])
-def sns_callback_route():
-    try:
-        data = json.loads(request.data.decode('utf-8'))
-    except Exception as e:
-        print(e)
-        print("exception parsing {}".format(request.data))
-    else:
-        if data['Type'] == 'SubscriptionConfirmation' and 'SubscribeURL' in data:
-            # call the subscription url to confirm
-            print(data['SubscribeURL'])
-            requests.get(data['SubscribeURL'])
-        elif data['Type'] == 'Notification':
-            # extract out the message and process
-            print("Message is {}".format(data))
-            process_sns_message(data)
+#TODO: Maybe a better way to keep track of this
+class MessageType(fields.Raw):
+    def format(self, value):
+        return value.upper() if value.upper() in ('STATUS', 'CONTROL') else None
+
+class ActionType(fields.Raw):
+    def format(self, value):
+        return value.upper() if value.upper() in ('OPEN', 'CLOSE') else None
+
+class GarageNameType(fields.Raw):
+    def format(self, value):
+        return value.upper() if value.upper() in ('LEFT', 'RIGHT') else None
+
+
+SNSMessageModel = api.model('SNSMessageModel', {
+    'type': MessageType,
+    'action': ActionType,
+    'garage_name': GarageNameType
+})
+
+
+@api.route('/sns-callback')
+class SNSCallbackResource(Resource):
+    def post(self):
+        try:
+            data = json.loads(request.data.decode('utf-8'))
+        except Exception as e:
+            print(e)
+            print("exception parsing {}".format(request.data))
         else:
-            print("Couldnt process message: {}".format(data))
+            if data['Type'] == 'SubscriptionConfirmation' and 'SubscribeURL' in data:
+                # call the subscription url to confirm
+                print(data['SubscribeURL'])
+                requests.get(data['SubscribeURL'])
+            elif data['Type'] == 'Notification':
+                # extract out the message and process
+                print("Message is {}".format(data))
+                self.process_sns_message(data)
+            else:
+                print("Couldnt process message: {}".format(data))
 
-    return 'OK\n'
+        return 'OK\n'
+
+    def process_sns_message(self, data):
+        # message that came via SNS
+        message_id = data['MessageId']
+        raw_message = json.loads(data['Message'])
+        action_type = raw_message['type']
+        garage_name = raw_message['garage_name']
+
+        response = {}
+
+        # TODO figure out a better way to update the json
+        if action_type == 'STATUS':
+            response['status'] = get_garage_json_status(garage_name, limit_keys=response_keys)
+        elif action_type == 'CONTROL':
+            current_status = raw_message['current_status']
+            return_message = json.loads(garage_control_json(garage_name, current_status, limit_keys=response_keys))
+            return_message['status'] = 'success' if not return_message['error'] else 'fail'
+        else:
+            return_message = {'status': 'Invalid action passed', 'error': True}
+
+        response['id'] = message_id[:4]
+
+        # publish the message to the queue
+        print("TEST publishing {}".format(response))
+
+        #   queue.send_message(MessageBody=json.dumps(return_message))
 
 
 if __name__ == '__main__':
