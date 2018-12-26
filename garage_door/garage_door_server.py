@@ -5,7 +5,7 @@ import configparser
 import requests
 
 from flask import Flask, request
-from flask_restplus import Api, Resource, fields
+from flask_restplus import Api, Resource, fields, marshal
 import boto3
 import RPi.GPIO as GPIO
 
@@ -23,9 +23,6 @@ RELAY_PIN_MAPPING = {'LEFT' : 27, 'RIGHT': 22}
 GARAGE_SENSOR_MAPPING = {'LEFT': 25, 'RIGHT': 16}
 SORTED_KEYS = [k for k in sorted(RELAY_PIN_MAPPING)] # Sort keys so order is the same
 
-# connect and retrieve queue name
-sqs = boto3.resource('sqs')
-queue = sqs.get_queue_by_name(QueueName='garage-responses')
 
 def setup_pins():
     GPIO.setmode(GPIO.BCM)
@@ -54,22 +51,22 @@ def get_garage_status(garage_name):
     return garage_status, error
 
 def control_garage(garage_name, action):
-    # action is (OPEN, CLOSE)
-    action_error = True
+    response = {'garage_name': garage_name, 'error': True}
+
     if garage_name not in RELAY_PIN_MAPPING:
-        message = 'INVALID GARAGE_NAME'
-        return message, action_error
+        response['message'] = 'INVALID GARAGE_NAME'
+        return response
 
     if action not in ('OPEN', 'CLOSE'):
-        message = 'INVALID ACTION'
-        return message, action_error
+        response['message'] = 'INVALID ACTION'
+        return response
 
     # Check what the current location is
     current_garage_status, status_error = get_garage_status(garage_name)
     if current_garage_status == 'OPEN' and action == 'OPEN':
-        message = 'Trying to open garage that is already open'
+        response['message'] = 'Trying to open garage that is already open'
     elif current_garage_status == 'CLOSED' and action == 'CLOSE':
-        message = 'Trying to close garage that is already closed'
+        response['message'] = 'Trying to close garage that is already closed'
     else:
         relay_pin = RELAY_PIN_MAPPING[garage_name]
         try:
@@ -77,16 +74,12 @@ def control_garage(garage_name, action):
             time.sleep(0.5)
 #           GPIO.output(relay_pin,GPIO.LOW)
         except:
-            message = 'AN ERROR OCCURED WHILE TRIGGERING THE RELAY'
+            response['message'] = 'AN ERROR OCCURED WHILE TRIGGERING THE RELAY'
         else:
-            action_error = False
-            message = 'TRIGGERED {0} GARAGE TO {1}. OLD POSITION: {2}'.format(garage_name, action, current_garage_status)
+            response['error'] = False
+            response['message'] = 'TRIGGERED {0} GARAGE TO {1}. OLD POSITION: {2}'.format(garage_name, action, current_garage_status)
 
-    # we dont return this in the output as it makes the message big
-    if action_error:
-        print(message)
-
-    return message, action_error
+    return response
 
 def get_garage_json_status(garage_name, limit_keys=None):
     # limit_keys used to filter dictionary to trim down response
@@ -116,17 +109,6 @@ def get_garage_json_status(garage_name, limit_keys=None):
         response.append(one_response)
 
     return json.dumps(response)
-
-def garage_control_json(garage_name, current_status, limit_keys=None):
-    response = {}
-    response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
-
-    message, error = control_garage(garage_name, current_status)
-
-    response.update({'status': message, 'error': error})
-    response = response if limit_keys is None else {k: response[k] for k in limit_keys if k in response}
-    return json.dumps(response)
-
 
 # web related logic
 
@@ -183,6 +165,12 @@ SNSMessageModel = api.model('SNSMessageModel', {
 
 @api.route('/sns-callback')
 class SNSCallbackResource(Resource):
+    def __init__(self, api=None, *args, **kwargs):
+        super().__init__(api, *args, **kwargs)
+        #TODO: queue name from config
+        sqs = boto3.resource('sqs')
+        self._queue = sqs.get_queue_by_name(QueueName='garage-responses')
+
     def post(self):
         try:
             data = json.loads(request.data.decode('utf-8'))
@@ -206,28 +194,24 @@ class SNSCallbackResource(Resource):
     def process_sns_message(self, data):
         # message that came via SNS
         message_id = data['MessageId']
-        raw_message = json.loads(data['Message'])
-        action_type = raw_message['type']
-        garage_name = raw_message['garage_name']
+        raw_input_message = json.loads(data['Message']) # the message as it was sent in
+        cleaned_message = marshal(raw_input_message, SNSMessageModel)
+        action_type = cleaned_message['type']
+        garage_name = cleaned_message['garage_name']
 
-        response = {}
+        response = {'id': message_id[:4], 'type': 'STATUS'}
 
-        # TODO figure out a better way to update the json
         if action_type == 'STATUS':
             response['status'] = get_garage_json_status(garage_name, limit_keys=response_keys)
         elif action_type == 'CONTROL':
-            current_status = raw_message['current_status']
-            return_message = json.loads(garage_control_json(garage_name, current_status, limit_keys=response_keys))
-            return_message['status'] = 'success' if not return_message['error'] else 'fail'
+            response['status'] = [control_garage(garage_name, action_type)]
         else:
-            return_message = {'status': 'Invalid action passed', 'error': True}
-
-        response['id'] = message_id[:4]
+            response['status'] = [{'message': 'Invalid action passed', 'error': True}]
 
         # publish the message to the queue
         print("TEST publishing {}".format(response))
 
-        #   queue.send_message(MessageBody=json.dumps(return_message))
+        # self._queue.send_message(MessageBody=json.dumps(response))
 
 
 if __name__ == '__main__':
