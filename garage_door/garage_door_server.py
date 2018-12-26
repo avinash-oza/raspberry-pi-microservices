@@ -5,7 +5,7 @@ import configparser
 import requests
 
 from flask import Flask, request
-from flask_restplus import Api, Resource
+from flask_restplus import Api, Resource, fields
 import boto3
 import RPi.GPIO as GPIO
 
@@ -155,9 +155,36 @@ def process_sns_message(data):
 
 # web related logic
 
-@app.route('/garage/status/<garage_name>')
-def garage_status_route(garage_name):
-    return get_garage_json_status(garage_name)
+GarageStatusModel = api.model('GarageStatusModel', {
+    'garage_name': fields.String(),
+    'status': fields.String(),
+    'error': fields.Boolean(),
+})
+
+NagiosGarageStatusModel = api.inherit('NagiosGarageStatusModel', GarageStatusModel,
+                                      {'return_code': fields.String(),
+                                       'plugin_output': fields.String(),
+                                       'status_time': fields.String(),
+                                       'service_description': fields.String()
+                                       }
+                                      )
+
+GarageStatusResponseModel = api.model('GarageStatusResponseModel',
+                                      {'status': fields.List(fields.Nested(GarageStatusModel))
+                                       }
+                                      )
+
+NagiosGarageStatusResponseModel = api.model('GarageStatusResponseModel',
+                                            {'status': fields.List(fields.Nested(NagiosGarageStatusModel))
+                                             }
+                                            )
+
+@api.route('/garage/status/<garage_name>')
+class GarageStatusResource(Resource):
+    @api.marshal_with(GarageStatusResponseModel)
+    def get(self, garage_name):
+        return {'status': get_garage_json_status(garage_name) }
+
 
 @app.route('/sns-callback', methods=['POST'])
 def sns_callback_route():
