@@ -7,8 +7,9 @@ import requests
 from flask import Flask, request
 from flask_restplus import Api, Resource, fields, marshal
 import boto3
+#TODO: REMOVE THIS CODE
 import RPi.GPIO as GPIO
-
+# from mock_gpio import GPIO
 config = configparser.ConfigParser()
 config.read('garage_door.config')
 
@@ -104,11 +105,9 @@ def get_garage_json_status(garage_name, limit_keys=None):
         one_response['status'] = garage_status
         one_response['error'] = error
 
-        one_response = one_response if limit_keys is None else {k: one_response[k] for k in limit_keys if k in one_response}
-
         response.append(one_response)
 
-    return json.dumps(response)
+    return response
 
 # web related logic
 
@@ -218,6 +217,6 @@ if __name__ == '__main__':
     try:
         setup_pins()
         port_number = int(config.get('general', 'port'))
-        app.run(host='0.0.0.0', port=port_number)
+        app.run(host='0.0.0.0', port=port_number, debug=True)
     finally:
         GPIO.cleanup()
