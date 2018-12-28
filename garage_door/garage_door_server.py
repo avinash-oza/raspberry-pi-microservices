@@ -82,8 +82,7 @@ def control_garage(garage_name, action):
 
     return response
 
-def get_garage_json_status(garage_name, limit_keys=None):
-    # limit_keys used to filter dictionary to trim down response
+def get_garage_dict_status(garage_name):
     response = []
     if garage_name.lower() == 'all':
         garage_name = SORTED_KEYS
@@ -138,7 +137,7 @@ GarageStatusResponseModel = api.model('GarageStatusResponseModel',
 class GarageStatusResource(Resource):
     @api.marshal_with(GarageStatusResponseModel)
     def get(self, garage_name='ALL'):
-        return {'status': get_garage_json_status(garage_name), 'type': 'STATUS' }
+        return {'status': get_garage_dict_status(garage_name), 'type': 'STATUS'}
 
 
 #TODO: Maybe a better way to keep track of this
@@ -152,7 +151,7 @@ class ActionType(fields.Raw):
 
 class GarageNameType(fields.Raw):
     def format(self, value):
-        return value.upper() if value.upper() in ('LEFT', 'RIGHT') else None
+        return value.upper() if value.upper() in ('LEFT', 'RIGHT', 'ALL') else None
 
 
 SNSMessageModel = api.model('SNSMessageModel', {
@@ -201,14 +200,15 @@ class SNSCallbackResource(Resource):
         response = {'id': message_id[:4], 'type': 'STATUS'}
 
         if action_type == 'STATUS':
-            response['status'] = get_garage_json_status(garage_name, limit_keys=response_keys)
+            response['status'] = get_garage_dict_status(garage_name)
         elif action_type == 'CONTROL':
             response['status'] = [control_garage(garage_name, action_type)]
         else:
             response['status'] = [{'message': 'Invalid action passed', 'error': True}]
 
         # publish the message to the queue
-        print("TEST publishing {}".format(response))
+        cleaned_response = marshal(response, GarageStatusResponseModel)
+        print("TEST publishing {}".format(json.dumps(cleaned_response)))
 
         # self._queue.send_message(MessageBody=json.dumps(response))
 
