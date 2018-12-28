@@ -23,6 +23,19 @@ api = Api(app)
 RELAY_PIN_MAPPING = {'LEFT' : 27, 'RIGHT': 22} 
 GARAGE_SENSOR_MAPPING = {'LEFT': 25, 'RIGHT': 16}
 SORTED_KEYS = [k for k in sorted(RELAY_PIN_MAPPING)] # Sort keys so order is the same
+# 0 is CLOSED
+# 1 is OPEN
+#TODO: Make this an enum
+CLOSE = CLOSED = 0
+OPEN = 1
+
+def value_to_status(value):
+    """
+    returns the position given a number
+    :param value:
+    :return:
+    """
+    return 'CLOSED' if value == 0 else 'OPEN'
 
 
 def setup_pins():
@@ -34,22 +47,19 @@ def setup_pins():
         GPIO.setup(one_pin, GPIO.IN)
 
 def get_garage_status(garage_name):
-    error = True # Start by default with error
-    try:
-        pin_result = GPIO.input(GARAGE_SENSOR_MAPPING[garage_name])
-    except KeyError:
-        garage_status = 'INVALID GARAGE NAME'
-    else:
-        if pin_result == 0:
-            garage_status = 'CLOSED'
-            error = False
-        elif pin_result == 1:
-            garage_status = 'OPEN'
-            error = False
-        else:
-            garage_status = 'UNKNOWN'
+    """
+    Gets the garage status specified. Throws an exception if an invalid name is passed
+    :param garage_name:
+    :return:
+    """
+    if garage_name not in GARAGE_SENSOR_MAPPING:
+        raise ValueError("Invalid garage name passed")
 
-    return garage_status, error
+    pin_result = GPIO.input(GARAGE_SENSOR_MAPPING[garage_name])
+    if pin_result in (OPEN, CLOSED):
+        return bool(pin_result)
+
+    raise ValueError("Pin value of {} is invalid".format(pin_result))
 
 def control_garage(garage_name, action):
     response = {'garage_name': garage_name, 'error': True}
@@ -63,7 +73,8 @@ def control_garage(garage_name, action):
         return response
 
     # Check what the current location is
-    current_garage_status, status_error = get_garage_status(garage_name)
+    current_garage_status = value_to_status(get_garage_status(garage_name))
+    response['status'] = current_garage_status
     if current_garage_status == 'OPEN' and action == 'OPEN':
         response['message'] = 'Trying to open garage that is already open'
     elif current_garage_status == 'CLOSED' and action == 'CLOSE':
@@ -194,15 +205,15 @@ class SNSCallbackResource(Resource):
         message_id = data['MessageId']
         raw_input_message = json.loads(data['Message']) # the message as it was sent in
         cleaned_message = marshal(raw_input_message, SNSMessageModel)
-        action_type = cleaned_message['type']
+        message_type = cleaned_message['type']
         garage_name = cleaned_message['garage_name']
 
         response = {'id': message_id[:4], 'type': 'STATUS'}
 
-        if action_type == 'STATUS':
+        if message_type == 'STATUS':
             response['status'] = get_garage_dict_status(garage_name)
-        elif action_type == 'CONTROL':
-            response['status'] = [control_garage(garage_name, action_type)]
+        elif message_type == 'CONTROL':
+            response['status'] = [control_garage(garage_name, cleaned_message['action'])]
         else:
             response['status'] = [{'message': 'Invalid action passed', 'error': True}]
 
