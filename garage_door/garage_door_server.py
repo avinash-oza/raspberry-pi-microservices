@@ -46,6 +46,7 @@ def setup_pins():
     for one_pin in GARAGE_SENSOR_MAPPING.values():
         GPIO.setup(one_pin, GPIO.IN)
 
+
 def get_garage_status(garage_name):
     """
     Gets the garage status specified. Throws an exception if an invalid name is passed
@@ -93,6 +94,7 @@ def control_garage(garage_name, action):
 
     return response
 
+
 def get_garage_dict_status(garage_name):
     response = []
     if garage_name.lower() == 'all':
@@ -101,19 +103,22 @@ def get_garage_dict_status(garage_name):
         garage_name = [garage_name]
 
     for one_garage in garage_name:
-        one_response = {}
-        garage_status, error = get_garage_status(one_garage)
-
-        # Nagios fields
-        one_response['plugin_output'] = "Garage is {0}".format(garage_status)
-        one_response['service_description'] = "{0} Garage Status".format(one_garage.capitalize())
-        one_response['hostname'] = hostname
-        one_response['return_code'] = "0" if garage_status == "CLOSED" else "2"
+        one_response = {'error': False}
+        try:
+            garage_status = get_garage_status(one_garage)
+        except Exception as e:
+            one_response['error'] = True
+            one_response['status'] = str(e)
+        else:
+            # Nagios fields
+            one_response['plugin_output'] = "Garage is {0}".format(garage_status)
+            one_response['service_description'] = "{0} Garage Status".format(one_garage.capitalize())
+            one_response['hostname'] = hostname
+            one_response['return_code'] = "0" if garage_status == "CLOSED" else "2"
+            one_response['status'] = 'OPEN' if garage_status == OPEN else 'CLOSED'
 
         one_response['garage_name'] = one_garage
         one_response['status_time'] = datetime.datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
-        one_response['status'] = garage_status
-        one_response['error'] = error
 
         response.append(one_response)
 
@@ -228,6 +233,6 @@ if __name__ == '__main__':
     try:
         setup_pins()
         port_number = int(config.get('general', 'port'))
-        app.run(host='0.0.0.0', port=port_number, debug=True)
+        app.run(host='0.0.0.0', port=port_number)
     finally:
         GPIO.cleanup()
