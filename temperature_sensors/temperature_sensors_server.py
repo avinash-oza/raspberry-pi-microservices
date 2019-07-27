@@ -32,7 +32,7 @@ def temperature_route(sensor_name):
         sensor_names = [sensor_name]
 
     for one_sensor in sensor_names:
-        one_response = {}
+        one_response = dict(status_time_utc=datetime.datetime.utcnow().isoformat())
         try:
             sensor_temp, error = get_ds18b20_sensor(TEMPERATURE_SENSOR_MAPPING[one_sensor], critical_temp=CRITICAL_TEMP)
         except:
